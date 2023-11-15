@@ -1,66 +1,101 @@
-Debounce algorithm test
-=======================
+Debounce test
+=============
 
-This repository provides a test harness for debounce algorithms,
-which are used to compensate for the [contact bounce] of mechanical
-switches. The goal is to verify the correctness and compare the
-performance of the given algorithm implementations.
+This repository provides a test harness for debounce functions.
+The harness is implemented in C, and produces a digital signal
+with pseudo-random contact bounces and noise interferences.
 
-For this purpose, a test class produces a repeatable pseudo-random
-test signal. The signal includes flips with random bounces, as well
-as noise spikes to simulate electromagnetic interference:
+I have set up this harness to experiment with debounce functions
+for keyboard firmware. Check the `src` directory for examples.
+In particular, I use the EvenOdd algorithm for the [Chrumm] keyboard.
+The lowest latency is achieved by the FlipWait algorithm, at the
+expense of more complexity.
 
-	111111111111111111111111111000000000000000000000001000000000
-	001111111111111111111111111101000000000010000000000000000100
-	111111111111111011111111111111111111111111111101000000000100
-	000000000000000000000000110011111111111111111111101000000000
-	000100000000000000000000000011001111111111111111011111111111
-	111111111111111101000000000000010000000000000000000011111...
-
-[contact bounce]: https://en.wikipedia.org/wiki/Debounce#Contact_bounce
+[Chrumm]: https://github.com/sevmeyer/chrumm-keyboard/
 
 
-Rules
+Signal
+------
+
+The test signal imitates a simple SPST-NO push switch
+(Single Pole, Single Throw, Normally Open), as commonly used
+for mechanical keyboards. It is assumed to be connected to a
+digital input pin with a pull-up resistor. Therefore, the pin
+reads `1` when the switch is open, and `0` when pressed. It is
+further assumed that the pin is sampled once per millisecond.
+Each switch event must be detected within 32 ticks.
+
+          Switch   .--[ R ]-- V+
+           __|__   |
+    GND ---O   O---+--------- Pin
+
+
+Bounce
+------
+
+Relevant bounce statistics have been published in
+[A Guide to Debouncing] by Jack Ganssle, with an
+average bounce time of 1.6 ms and a maximum of 6.2 ms.
+[Switch Bouncing Around] by David Ashton reports
+reasonably similar results, with a maximum of 3 ms.
+
+Keyboard switch manufacturers [Gateron] and [Kailh] specify
+a maximum bounce time of 5 ms. [Cherry] used to do the same,
+but nowadays markets "typical" bounce times of less than 1 ms.
+
+The test signal has a maximum bounce time of 8 ticks,
+to add a bit of a safety margin.
+
+[A Guide to Debouncing]: https://web.archive.org/web/20230924002022/http://www.ganssle.com/debouncing.htm
+[Switch Bouncing Around]: https://www.eeweb.com/switch-bouncing-around/
+[Gateron]: https://www.gateron.co/pages/gateron-g-pro-switch-datasheet
+[Kailh]: https://www.kailh.net/pages/product-datasheet
+[Cherry]: https://web.archive.org/web/20141205193432/http://www.cherrycorp.com/english/switches/key/mx.htm
+
+
+Noise
 -----
 
-Signal rules:
+In addition to bounces, one must also anticipate random noise,
+as explained in [A Guide to Debouncing] by Jack Ganssle, or
+the [Ultimate Guide to Switch Debounce] by Max Maxfield.
+Therefore, the tests are run multiple times with different
+noise saturations. This is rather arbitrary of course, but
+should serve as a useful sanity check.
 
-- The initial signal state is 1
-- A bounce lasts for at most 5 ticks
-- Flips are separated by at least 25 ticks
-- Noise lasts for at most 1 tick
-- Noise is separated by at least 25 ticks
+Noise avgPeriod=20 (5%) minGap=10:
 
-Reporting rules:
+    -----1----------------------1---
+    -----------------------1--------
+    -----------1--------------------
+    ----1-------------------1-------
 
-- Each flip must be reported exactly once
-- Each flip must be reported before the next flip happens
-- Noise spikes must be ignored
+Noise avgPeriod=10 (10%) minGap=2:
 
-A tick can be considered equivalent to one millisecond.
+    -------1--------------1---------
+    1--------------1---------1------
+    -------1--1-----------1-----1---
+    ---------1---------------1------
 
+Noise avgPeriod=5 (20%) minGap=1:
 
-Interface
----------
+    -1-----1-1-1-----1----1----1----
+    --1---1-----1------1---1---1--1-
+    ----1---1----1--1--1-----1---1-1
+    ------1---1-------1-------1-----
 
-Algorithms perform the debouncing in a loop function:
-
-	void loop(Test& test)
-
-The `Test` object provides three relevant functions:
-
-	int read()              // Get signal state (0 or 1)
-	void sleep(int ticks)   // Progress time
-	void report(int state)  // Report a state flip
+[Ultimate Guide to Switch Debounce]: https://www.eejournal.com/article/ultimate-guide-to-switch-debounce-part-2/
 
 
 Build
 -----
 
-On Linux, the tests can be compiled and run with:
+Initialize the build directory and compile everything with:
 
-	mkdir build
-	cd build
-	cmake -DCMAKE_BUILD_TYPE=Release ..
-	make
-	./debounce [FLIPCOUNT]
+    cmake -B build
+    cmake --build build
+
+Each function is compiled to a separate binary.
+To compile a specific function only:
+
+    cmake --build build --target test-evenodd

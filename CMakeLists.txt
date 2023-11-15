@@ -1,18 +1,21 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
 
-project(debounce LANGUAGES CXX)
+project(debounce)
 
-# Compiler settings
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+# Language
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_EXTENSIONS OFF)
 
-# Verbose compiler warnings
+# Warnings
 if(MSVC)
-	add_compile_options(/W4 /WX)
+    add_compile_options(/W4 /WX)
 else()
-	add_compile_options(-Wall -Wextra -Werror -pedantic)
+    add_compile_options(-Wall -Wextra -Werror -pedantic)
 endif()
 
-# Executable
-add_executable(debounce "src/main.cpp")
+# Executables
+file(GLOB sources CONFIGURE_DEPENDS src/test*.c)
+foreach(source ${sources})
+    cmake_path(GET source STEM name)
+    add_executable(${name} ${source})
+endforeach()
